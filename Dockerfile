@@ -1,6 +1,3 @@
-# Stage 1: Get Chrome/Chromium from chromedp/headless-shell
-FROM docker.io/chromedp/headless-shell:stable AS chrome
-
 FROM ubuntu:24.04
 
 # Switch from dash to bash by default.
@@ -22,45 +19,26 @@ RUN sed -i 's|http://archive.ubuntu.com/ubuntu/|http://mirror://mirrors.ubuntu.c
 	DEBIAN_FRONTEND=noninteractive apt-get install -y --reinstall $(dpkg-query -f '${binary:Package} ' -W) && \
 	mandb -c && \
 	DEBIAN_FRONTEND=noninteractive apt-get install -y \
-		ca-certificates wget ripgrep \
-		git jq sqlite3 curl vim neovim lsof iproute2 less nginx \
-		make python3-pip python-is-python3 tree net-tools file build-essential \
-		pipx psmisc bsdmainutils sudo socat \
+		ca-certificates wget \
+		git curl less \
+		net-tools file \
+		sudo \
 		openssh-server openssh-client \
 		iputils-ping socat netcat-openbsd \
 		libcap2-bin \
 		unzip util-linux rsync \
-		ubuntu-server ubuntu-dev-tools ubuntu-standard \
 		man-db manpages manpages-dev \
-		mitmproxy \
 		systemd systemd-sysv \
-		atop btop iotop ncdu \
-		golang-go git \
-		libglib2.0-0 libnss3 libx11-6 libxcomposite1 libxdamage1 \
-		libxext6 libxi6 libxrandr2 libgbm1 libgtk-3-0 \
-		fonts-noto-color-emoji fonts-symbola \
-		docker.io docker-buildx docker-compose-v2 \
-		imagemagick ffmpeg \
-		gh \
 		dbus-user-session \
 		&& apt-get remove -y pollinate ubuntu-fan && \
 	# Allow non-root users to use ping without sudo by granting CAP_NET_RAW
 	setcap cap_net_raw=+ep /usr/bin/ping && \
-	fc-cache -f -v && \
 	# Remove policy-rc.d so services can start normally (the base image includes this
 	# to prevent services from starting during build, but we run systemd at runtime)
 	rm -f /usr/sbin/policy-rc.d
 
-# Install uv to /usr/local/bin
-RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
-
 # Configure systemd
-RUN rm /etc/systemd/system/multi-user.target.wants/console-setup.service \
-		/etc/systemd/system/multi-user.target.wants/ModemManager.service \
-		/etc/systemd/system/multi-user.target.wants/snapd.* \
-		/etc/systemd/system/multi-user.target.wants/unattended-upgrades.* \
-		/etc/systemd/system/multi-user.target.wants/ubuntu-advantage.service && \
-	systemctl mask -- getty.target \
+RUN	systemctl mask -- getty.target \
 		fwupd.service \
 		fwupd-refresh.service \
 		fwupd-refresh.timer \
@@ -115,18 +93,10 @@ RUN rm /etc/systemd/system/multi-user.target.wants/console-setup.service \
 		apt-daily.timer \
 		plymouth-log.service && \
 	# systemd-logind is disabled but not masked. It's involved in populating the XDG runtime dir sockets... somehow
-	systemctl disable docker.service containerd.service getty.target systemd-logind.service \
-		nginx.service \
+	systemctl disable getty.target systemd-logind.service \
                    console-getty.service \
-		   atop.service \
                    getty@.service \
-                   snapd.socket \
 		   motd-news.timer motd-news.service \
-		    apport.service apport-autoreport.timer apport-autoreport.path apport-forward.socket \
-		    snapd.snap-repair.timer snapd.snap-repair.service \
-		    udisks2.service \
-		   ufw.service \
-		   lvm2-lvmpolld.socket \
                    systemd-ask-password-wall.service \
                    systemd-ask-password-console.service \
                    systemd-machine-id-commit.service \
@@ -138,10 +108,7 @@ RUN rm /etc/systemd/system/multi-user.target.wants/console-setup.service \
                    systemd-udev-settle.service \
 		   e2scrub_reap.service \
 		   systemd-update-utmp.service \
-		   atopacct.service \
-		   sysstat.service \
-                   systemd-hwdb-update.service \
-		   multipathd.service && \
+                   systemd-hwdb-update.service && \
 	mkdir -p /etc/systemd/system.conf.d && \
     		echo '[Manager]' > /etc/systemd/system.conf.d/container-overrides.conf && \
     		echo 'LogLevel=info' >> /etc/systemd/system.conf.d/container-overrides.conf && \
@@ -159,7 +126,6 @@ RUN usermod -l exedev -c "exe.dev user" ubuntu && \
 	mv /home/ubuntu /home/exedev && \
 	usermod -d /home/exedev exedev && \
 	usermod -aG sudo exedev && \
-	usermod -aG docker exedev && \
 	sed -i 's/^ubuntu:/exedev:/' /etc/subuid /etc/subgid && \
 	echo 'exedev ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers && \
 	echo 'Defaults:exedev verifypw=any' >> /etc/sudoers && \
@@ -174,12 +140,8 @@ ENV EXEUNTU=1
 # STOPSIGNAL SIGRTMIN+3
 
 
-# Copy the self-contained Chrome bundle from chromedp/headless-shell
-COPY --from=chrome /headless-shell /headless-shell
-ENV PATH="/usr/local/bin:/headless-shell:${PATH}"
-
-RUN mkdir -p /home/exedev /home/exedev/.config/shelley && \
-    chown exedev:exedev /home/exedev /home/exedev/.config /home/exedev/.config/shelley
+RUN mkdir -p /home/exedev && \
+    chown exedev:exedev /home/exedev
 
 USER exedev
 
@@ -191,9 +153,6 @@ RUN echo 'export PATH="$HOME/.local/bin:$PATH"' >> /home/exedev/.bashrc && \
     echo 'export XDG_RUNTIME_DIR="/run/user/$(id -u)"' >> /home/exedev/.bashrc && \
     echo 'export XDG_RUNTIME_DIR="/run/user/$(id -u)"' >> /home/exedev/.profile
 
-# Configure git to use 'main' as default branch name
-RUN git config --global init.defaultBranch main
-
 # Switch back to root to install systemd service
 USER root
 
@@ -204,12 +163,6 @@ RUN rm -rf /etc/update-motd.d/* /etc/motd && touch /home/exedev/.hushlogin && ch
 COPY motd-snippet.bash /tmp/motd-snippet.bash
 RUN cat /tmp/motd-snippet.bash >> /home/exedev/.bashrc && rm /tmp/motd-snippet.bash
 
-# Create systemd socket and service for Shelley (socket activation)
-COPY shelley.socket /etc/systemd/system/shelley.socket
-COPY shelley.service /etc/systemd/system/shelley.service
-RUN chmod 644 /etc/systemd/system/shelley.socket /etc/systemd/system/shelley.service && \
-    systemctl enable shelley.socket
-
 # Create systemd oneshot service for /exe.dev/setup script
 COPY exe-setup.service /etc/systemd/system/exe-setup.service
 RUN chmod 644 /etc/systemd/system/exe-setup.service && \
@@ -219,19 +172,6 @@ RUN chmod 644 /etc/systemd/system/exe-setup.service && \
 # this wrapper script is an init, and exec's it rather than forking it.
 # It would be better if you could indicate that via an env variable or something.
 COPY init-wrapper.sh /usr/local/bin/init
-
-# Install native codex; installs to /usr/local/bin
-RUN ARCH=$(uname -m) && \
-    case ${ARCH} in \
-        x86_64) CODEX_ARCH="x86_64-unknown-linux-musl" ;; \
-        aarch64|arm64) CODEX_ARCH="aarch64-unknown-linux-musl" ;; \
-        *) echo "Unsupported architecture: ${ARCH}" && exit 1 ;; \
-    esac && \
-    CODEX_VERSION=$(curl -fsSL https://api.github.com/repos/openai/codex/releases/latest | jq -r '.tag_name') && \
-    curl -fsSL "https://github.com/openai/codex/releases/download/${CODEX_VERSION}/codex-${CODEX_ARCH}.tar.gz" | \
-    tar -xzC /usr/local/bin && \
-    mv "/usr/local/bin/codex-${CODEX_ARCH}" /usr/local/bin/codex && \
-    chmod +x /usr/local/bin/codex
 
 # Create config directories for LLM agents
 RUN mkdir -p /home/exedev/.claude /home/exedev/.codex /home/exedev/.pi && \
@@ -245,49 +185,13 @@ RUN chown exedev:exedev /home/exedev/.config/shelley/AGENTS.md && \
     ln -s /home/exedev/.config/shelley/AGENTS.md /home/exedev/.codex/AGENTS.md && \
     ln -s /home/exedev/.config/shelley/AGENTS.md /home/exedev/.pi/AGENTS.md
 
-# Install Claude to the native location (~/.local/bin) so auto-upgrades work correctly.
-# Symlink to /usr/local/bin for system-wide PATH access.
-RUN mkdir -p /home/exedev/.local/bin && \
-    ARCH=$(uname -m | sed 's/x86_64/x64/;s/aarch64/arm64/') && \
-    PLATFORM="linux-${ARCH}" && \
-    STABLE_VERSION=$(curl -fsSL https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/stable) && \
-    EXPECTED_HASH=$(curl -fsSL "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/${STABLE_VERSION}/manifest.json" | jq -r ".platforms[\"${PLATFORM}\"].checksum") && \
-    curl -fsSL "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/${STABLE_VERSION}/${PLATFORM}/claude" -o /home/exedev/.local/bin/claude && \
-    echo "${EXPECTED_HASH}  /home/exedev/.local/bin/claude" | sha256sum -c - && \
-    chmod +x /home/exedev/.local/bin/claude && \
-    chown -R exedev:exedev /home/exedev/.local && \
-    ln -s /home/exedev/.local/bin/claude /usr/local/bin/claude
-
-# Install pi (pi-coding-agent) standalone binary
-RUN ARCH=$(uname -m | sed 's/x86_64/x64/;s/aarch64/arm64/') && \
-    PI_VERSION=$(curl -fsSL https://api.github.com/repos/badlogic/pi-mono/releases/latest | jq -r '.tag_name') && \
-    curl -fsSL "https://github.com/badlogic/pi-mono/releases/download/${PI_VERSION}/pi-linux-${ARCH}.tar.gz" | \
-    tar xz -C /home/exedev/.local/ && \
-    ln -s /home/exedev/.local/pi/pi /home/exedev/.local/bin/pi && \
-    chown -R exedev:exedev /home/exedev/.local/pi && \
-    ln -s /home/exedev/.local/bin/pi /usr/local/bin/pi
-
 # Install pi exe.dev extension (LLM gateway + environment context)
 COPY pi-extension/ /home/exedev/.pi/agent/extensions/exe-dev/
 RUN chown -R exedev:exedev /home/exedev/.pi/agent
 
-# Custom nginx config and index page (nginx is installed but disabled by default)
-COPY nginx.conf /etc/nginx/sites-available/default
-COPY index.html /var/www/html/index.html
-RUN chmod 644 /var/www/html/index.html
-
 # Install xterm-ghostty terminfo for Ghostty terminal support
 COPY xterm-ghostty.terminfo /tmp/xterm-ghostty.terminfo
 RUN tic -x - < /tmp/xterm-ghostty.terminfo && rm /tmp/xterm-ghostty.terminfo
-
-# Copy the pre-built shelley binary (built externally for the target architecture)
-# This is placed late in the Dockerfile to maximize layer cache reuse, since
-# shelley is the most frequently changing component.
-COPY shelley /usr/local/bin/shelley
-RUN chmod +x /usr/local/bin/shelley && /usr/local/bin/shelley -help
-
-# Expose the web server ports
-EXPOSE 8000 9999
 
 LABEL "exe.dev/login-user"="exedev"
 CMD ["/usr/local/bin/init"]
