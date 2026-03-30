@@ -20,10 +20,9 @@ RUN sed -i 's|http://archive.ubuntu.com/ubuntu/|http://mirror://mirrors.ubuntu.c
 	mandb -c && \
 	DEBIAN_FRONTEND=noninteractive apt-get install -y \
 		ca-certificates wget \
-		git curl less \
+		curl less \
 		net-tools file \
 		sudo \
-		openssh-server openssh-client \
 		iputils-ping socat netcat-openbsd \
 		libcap2-bin \
 		unzip util-linux rsync \
