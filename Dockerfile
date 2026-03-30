@@ -133,6 +133,10 @@ RUN usermod -l exedev -c "exe.dev user" ubuntu && \
 	mkdir -p /var/lib/systemd/linger && \
 	touch /var/lib/systemd/linger/exedev
 
+# Install Lix
+# (Bash, because of https://gerrit.lix.systems/c/lix-installer/+/5423)
+RUN curl -sSf -L https://install.lix.systems/lix | bash -s -- install --no-confirm
+
 ENV EXEUNTU=1
 
 # https://github.com/trfore/docker-ubuntu2404-systemd/blob/main/Dockerfile suggests the following
